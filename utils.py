@@ -116,12 +116,14 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
         i for i in range(len(points_wd)) \
             if round(points_wd[i][2][layer_axis], 2) == round(center[layer_axis], 2)]
     
+    # print("119", center[layer_axis], [p[2][layer_axis] for p in points_wd])
+    # print([p[-1] for p in points_wd])
     capping_atoms = [
         p for p in points_wd if abs(float(p[2][layer_axis]) - center[layer_axis]) <= 0.2]
 
-    if len(capping_atoms) != num_capping_atoms:
-        capped_prism_data['error'] = f"Num capping atoms are {len(capping_atoms)}"
-        return capped_prism_data
+    # if len(capping_atoms) != num_capping_atoms:
+    #     capped_prism_data['error'] = f"Num capping atoms are {len(capping_atoms)}"
+    #     return capped_prism_data
     
     prism_atoms = [points_wd[c] for c in range(len(points_wd)) if c not in capping_inds]
     unique_heights = set([round(float(p[-1][layer_axis]), 1) for p in prism_atoms])
@@ -133,9 +135,9 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
 
     unique_heights = m_unique_heights
     
-    if len(unique_heights) != 2:
-        capped_prism_data["error"] = f"Num unique heights for triangle prism are {len(unique_heights)}, {unique_heights}"
-        return capped_prism_data
+    # if len(unique_heights) != 2:
+    #     capped_prism_data["error"] = f"Num unique heights for triangle prism are {len(unique_heights)}, {unique_heights}"
+    #     return capped_prism_data
 
     # split square based on height
     prism_sites_by_heights = {}
@@ -151,7 +153,15 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
         assert len(np.unique(v, axis=1) == 3), f"{site}, {len(v)}"
     
     # pair capping atoms to square edges
-    layer_1 = sorted(list(prism_sites_by_heights.keys()))[0]
+    # print([[k, len(v)] for k, v in prism_sites_by_heights.items()], num_prism_atoms)
+    layer_1 = sorted([k for k in prism_sites_by_heights.keys() if len(prism_sites_by_heights[k])==int(num_prism_atoms/2)])
+
+    if len(layer_1):
+        layer_1 = layer_1[0]
+    else:
+        capped_prism_data["error"] = "No prism found"
+        return capped_prism_data
+    
 
     prism = prism_sites_by_heights[layer_1]
     
@@ -172,7 +182,7 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
             return capped_prism_data
     
     if len(prism) != num_prism_atoms / 2:
-        capped_prism_data["error"] = f"Number of atoms for prism is {len(prism)}"
+        capped_prism_data["error"] = f"Number of atoms for prism is {len(prism)}. Expected {int(num_prism_atoms/2)}"
         return capped_prism_data
     try:
         hull = ConvexHull([p[-1][non_layer_axes] for p in prism])
@@ -208,15 +218,15 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
                                            non_layer_axes=non_layer_axes)
         cap_atom_present.append(_has_capped_atom)
       
-    if all(cap_atom_present):
-        capped_prism_data['capped_prism_present'] = True
-        capped_prism_data['prism'] = face_points
-        capped_prism_data['edges'] = edges
-        capped_prism_data['caps'] = capping_atoms
+    # if all(cap_atom_present):
+    capped_prism_data['capped_prism_present'] = True
+    capped_prism_data['prism'] = face_points
+    capped_prism_data['edges'] = edges
+    capped_prism_data['caps'] = capping_atoms
+    capped_prism_data['prism_full'] = prism
 
     capped_prism_data['cap_for_faces'] = cap_atom_present
-    if CN == 7:
-        print(capped_prism_data)
+
     return capped_prism_data
 
 
@@ -392,134 +402,6 @@ def get_colors(site_symbol_map):
     return cpd_colors
 
 
-def get_capped_prism_data(site, layer_axis, points_wd, CN):
-    
-    """
-    Check for the presence of capped prisms and return the 
-    coordinates.
-    """
-
-    num_capping_atoms = int(len(points_wd) / 3)
-    num_prism_atoms = num_capping_atoms * 2
-    
-    center = np.array(points_wd[0][2])
-    capped_prism_data = {'center_site': site, 'cp_present': False, 
-                        'layer_height': round(float(points_wd[0][2][layer_axis]), 2),
-                         'capped_prism_present': False}
-
-    # drop center from points_wd 
-    points_wd = [[p[0], p[1], np.array(p[3])] for p in points_wd]
-    non_layer_axes = np.array([0, 1, 2]) != layer_axis
-    capped_prism_data['center_coordinate'] = center[non_layer_axes]
-    
-    capping_inds = [
-        i for i in range(len(points_wd)) \
-            if round(points_wd[i][2][layer_axis], 2) == round(center[layer_axis], 2)]
-    
-    capping_atoms = [
-        p for p in points_wd if abs(float(p[2][layer_axis]) - center[layer_axis]) <= 0.2]
-
-    if len(capping_atoms) != num_capping_atoms:
-        capped_prism_data['error'] = f"Num capping atoms are {len(capping_atoms)}"
-        return capped_prism_data
-    
-    prism_atoms = [points_wd[c] for c in range(len(points_wd)) if c not in capping_inds]
-    unique_heights = set([round(float(p[-1][layer_axis]), 1) for p in prism_atoms])
-    m_unique_heights = []
-    for unique_height in unique_heights:
-        if np.any(abs(np.array(m_unique_heights) - unique_height) <= 0.5):
-            continue
-        m_unique_heights.append(unique_height)
-
-    unique_heights = m_unique_heights
-    
-    if len(unique_heights) != 2:
-        capped_prism_data["error"] = f"Num unique heights for triangle prism are {len(unique_heights)}, {unique_heights}"
-        return capped_prism_data
-
-    # split square based on height
-    prism_sites_by_heights = {}
-    for k in unique_heights:
-        val = []
-        for atom in prism_atoms:
-            if abs(round(float(atom[-1][layer_axis]), 1) -k) <= 0.5:
-                val.append(atom)
-        prism_sites_by_heights[k] = val
-        
-    for k, v in prism_sites_by_heights.items():
-        v = np.vstack([p[-1] for p in v])[:, non_layer_axes]
-        assert len(np.unique(v, axis=1) == 3), f"{site}, {len(v)}"
-    
-    # pair capping atoms to square edges
-    layer_1 = sorted(list(prism_sites_by_heights.keys()))[0]
-
-    prism = prism_sites_by_heights[layer_1]
-    
-    for i in range(len(prism)):
-        point = prism[i][-1][non_layer_axes]
-        poly = [prism[j][-1][non_layer_axes] for j in range(len(prism)) if j!=i]
-        
-        if point_in_hull(poly, point):
-            capped_prism_data["error"] = "Prism point inside prism"
-            return capped_prism_data
-        
-    for i in range(len(capping_atoms)):
-        point = capping_atoms[i][-1][non_layer_axes]
-        poly = [prism[j][-1][non_layer_axes] for j in range(len(prism))]
-        
-        if point_in_hull(poly, point):
-            capped_prism_data["error"] = "Capping point inside prism"
-            return capped_prism_data
-    
-    if len(prism) != num_prism_atoms / 2:
-        capped_prism_data["error"] = f"Number of atoms for prism is {len(prism)}"
-        return capped_prism_data
-    try:
-        hull = ConvexHull([p[-1][non_layer_axes] for p in prism])
-    except:
-        capped_prism_data["error"] = f"Error while constructing hull"
-        return capped_prism_data
-    edges = []
-    for simplex in hull.simplices:
-        edges.append([int(simplex[0]), int(simplex[1])])
-    
-    faces = []
-    for edge in edges:
-        edge = list(edge)[:2]
-        for i in range(int(CN/3)):
-            if i not in edge:
-                edge.append(i)
-        faces.append(edge)
-        
-    face_points = np.array([p[-1][non_layer_axes] for p in prism])
-
-    if not point_in_hull(poly=[p[2][non_layer_axes] for p in prism],
-                         point=center[non_layer_axes]):
-        capped_prism_data["error"] = f"Center not inside hull"
-        return capped_prism_data
-    
-    # check for capping atoms for all faces
-    cap_atom_present = []
-    for i, face in enumerate(faces):
-
-        _has_capped_atom = has_capped_atom(face_points=face_points, 
-                                           face_indices=face,
-                                           capping_atoms=capping_atoms,
-                                           non_layer_axes=non_layer_axes)
-        cap_atom_present.append(_has_capped_atom)
-      
-    if all(cap_atom_present):
-        capped_prism_data['capped_prism_present'] = True
-        capped_prism_data['prism'] = face_points
-        capped_prism_data['edges'] = edges
-        capped_prism_data['caps'] = capping_atoms
-
-    capped_prism_data['cap_for_faces'] = cap_atom_present
-    if CN == 7:
-        print(capped_prism_data)
-    return capped_prism_data
-
-
 def get_data(cif_path, CN):
     
     # get capped prisms data for the cif.
@@ -556,8 +438,8 @@ def get_data(cif_path, CN):
         for site, points_wd in conns.items():
 
             CN_vals = CN_numbers_of_site(points_wd)
-
             ncnp_cif["CNs"] = CN_vals
+
             if not CN in CN_vals[:10]:
                 continue
             
@@ -568,6 +450,7 @@ def get_data(cif_path, CN):
                                         layer_axis=layer_index,
                                         points_wd=points_wd.copy(),
                                         CN=CN)
+
             if site_capped_prims_data['capped_prism_present']:
                 site_capped_prims_data['center_element'] = site_symbol_map[site]
                 site_capped_prims_data['coordination_formula'] = get_formula(points_wd, site_symbol_map)
