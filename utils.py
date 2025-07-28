@@ -29,11 +29,19 @@ def rearrange_coordinates(points):
 
 
 
+def is_close(v1, v2):
+    if abs(v1 - v2) < 0.1:
+        return True
+    return False
+
+
+
 def sround(val):
     
     val = round(val, 4)
     val = round(val, 3)
     val = round(val, 2)
+    # val = round(val, 1)
     
     return val
 
@@ -436,11 +444,9 @@ def get_data(cif_path, CN):
         site_data = {}
         i = 0
         for site, points_wd in conns.items():
-
             CN_vals = CN_numbers_of_site(points_wd)
             ncnp_cif["CNs"] = CN_vals
-
-            if not CN in CN_vals[:10]:
+            if not CN in CN_vals[:10] and not int(CN*2/3) in CN_vals[:10]:
                 continue
             
             points_wd = sorted(points_wd, key=lambda x: x[0])  # make sorting consistent
@@ -450,7 +456,7 @@ def get_data(cif_path, CN):
                                         layer_axis=layer_index,
                                         points_wd=points_wd.copy(),
                                         CN=CN)
-
+            print(site_capped_prims_data)
             if site_capped_prims_data['capped_prism_present']:
                 site_capped_prims_data['center_element'] = site_symbol_map[site]
                 site_capped_prims_data['coordination_formula'] = get_formula(points_wd, site_symbol_map)
@@ -458,6 +464,10 @@ def get_data(cif_path, CN):
     
         if site_data:
             ncnp_cif['site_data'] = site_data
+        else:
+            print("NSD")
+    else:
+        print("layer index is None")
     return ncnp_cif
 
 
