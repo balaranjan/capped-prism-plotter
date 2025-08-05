@@ -60,8 +60,10 @@ with top_cols[1]:
             value=300,   # Default value
             step=1
         )
-    
+
+separate_atoms_by_layer = top_cols[2].toggle("Separate atoms by layer", value=False)
 show_labels = top_cols[2].toggle("Show labels", value=False)
+shade_prisms = top_cols[2].toggle("Shade prisms", value=True)
 
 with top_cols[0]:
     uploaded_file = st.file_uploader("Choose a file")
@@ -127,11 +129,7 @@ if uploaded_file is not None:
 
         unitcell_layer_heights = set([p[layer_axis] for p in unitcell_points])
         layer_heights = np.array(sorted(unitcell_layer_heights)[:2], dtype=float)
-        markers = ['.', '.']
-
-        # flip_layers = st.toggle("Flip layers", value=False)
-        # if flip_layers:
-        #     markers = ['.', '.']
+        markers = ['.', 'o']
 
         capped_prism_data_by_layers = defaultdict(list)
         tol = 0.05
@@ -145,20 +143,25 @@ if uploaded_file is not None:
 
         # TCTPs
         prism_and_cap_xys = []
-        for CN in [9, 12]:
+        sites_with_envs = set()
+        for CN in [12, 9]:
             cif_data = get_data(temp_file_path, CN=CN)
             if 'site_data' not in cif_data:
                 print("No site data")
                 continue
             for k, v in cif_data['site_data'].items():
-                # print(k, v)
+
+                if k in sites_with_envs:
+                    continue
+
                 atoms_with_this_site = [p for p in supercell_points if p[-1]==k]  #Change
                 site_formula = v['coordination_formula']
                 center_coordinate = np.array(v["center_coordinate"])
 
                 for atom in atoms_with_this_site:
-                    if not 0 < atom[0][layer_axis] < cell_height or \
-                        not point_in_hull(cell, atom[0][non_layer_axes]):
+                    if not 0-cell_height*tol < atom[0][layer_axis] < cell_height+cell_height*tol:
+                        #  or \
+                        # not point_in_hull(cell, atom[0][non_layer_axes])
                         continue
                     points_wd = get_first_n_neighbors(atom, supercell_points, n=CN)
                     formula = get_formula(points_wd, site_symbol_map)
@@ -169,11 +172,22 @@ if uploaded_file is not None:
                     atom_capped_prims_data = get_capped_prism_data(site=atom[1], 
                                                 layer_axis=layer_axis,
                                                 points_wd=points_wd,
-                                                CN=9)
+                                                CN=CN)
 
                     if atom_capped_prims_data['capped_prism_present']:
                         center_coordinate = atom_capped_prims_data["center_coordinate"]
                         prism = atom_capped_prims_data['prism']
+
+                        prism_atom_inside_cell = [point_in_hull(cell, atom[0][non_layer_axes])]
+                        for point in prism:
+                            prism_atom_inside_cell.append(point_in_hull(cell, point))
+
+                        if not any(prism_atom_inside_cell):
+                            continue
+
+                        if k == "Si":
+                            print(atom)
+
                         caps = atom_capped_prims_data['caps']
                         edges = atom_capped_prims_data['edges']
                         prism_full = atom_capped_prims_data['prism_full']
@@ -191,11 +205,11 @@ if uploaded_file is not None:
                         capped_prism_data_by_layers[key].append(
                             [center_coordinate, prism, edges, caps]
                         )
-
+                        sites_with_envs.add(k)
+        for k, v in capped_prism_data_by_layers.items():
+            print(k, [_v[1].shape for _v in v])
         # Plot prisms
-        print("194", capped_prism_data_by_layers.keys(), cell_height)
         layer_heights = sorted(list(capped_prism_data_by_layers.keys()))
-        layer_heights = np.array(layer_heights)
 
         atoms_to_plot = []
         layer_elements = defaultdict(set)
@@ -210,51 +224,63 @@ if uploaded_file is not None:
 
                 symbol = site_symbol_map[p[1]]
                 layer_elements[sround(h)].add(symbol)
-        # print(unitcell_lengths, cell_height)
-        # print(capped_prism_data_by_layers.keys())
+
         if len(capped_prism_data_by_layers) == 0:
             st.write("No trigonal or square prisms found!")
             # exit(0)
         elif len(capped_prism_data_by_layers) == 1:
-            print(layer_vals, capped_prism_data_by_layers.keys())
             for val in layer_vals:
                 if val not in capped_prism_data_by_layers:
                     capped_prism_data_by_layers[val] = []
+        elif len(capped_prism_data_by_layers) == 3:
+            top_h = sround(cell_height)
+            if top_h in capped_prism_data_by_layers:
+                # capped_prism_data_by_layers.pop(top_h)
+                # del layer_heights[layer_heights.index(top_h)]
+
+                # merge
+                if 0.0 in capped_prism_data_by_layers:
+                    v0 = capped_prism_data_by_layers[0.0]
+                    v0.extend(capped_prism_data_by_layers[top_h])
+                    capped_prism_data_by_layers[0.0] = v0
+
+                    capped_prism_data_by_layers.pop(top_h)
+                    del layer_heights[layer_heights.index(top_h)]
+
+        layer_heights = np.array(layer_heights)
         
-        assert len(capped_prism_data_by_layers) == 2, f"Num layers: {len(capped_prism_data_by_layers)}"
+        assert len(capped_prism_data_by_layers) == 2, f"Num layers: {len(capped_prism_data_by_layers)}, {capped_prism_data_by_layers.keys()}, {cell_height}"
         title = format_formula(title.split(',')[0].replace("~", "")) + "-type " + get_sg_symbol(temp_file_path)
         latex_code = top_cols[3].text_area("Edit title (LaTeX):", value=title, height=100)
 
-        if latex_code.strip():
-            top_cols[3].latex(latex_code)
-            title = latex_code.strip()
-        else:
-            top_cols[3].info("Type some LaTeX code above to see the preview.")
+        # if latex_code.strip():
+        #     top_cols[3].latex(latex_code)
+        #     title = latex_code.strip()
+        # else:
+        #     top_cols[3].info("Type some LaTeX code above to see the preview.")
 
-        # sorted_layer_heights = sorted(list(capped_prism_data_by_layers.keys()))
-        sorted_layer_heights = sorted(list(capped_prism_data_by_layers.keys()), 
-                                      key=lambda h: int(layer_elements[h] <= REs),
-                                      reverse=True)
+        sorted_layer_heights = sorted(list(capped_prism_data_by_layers.keys()))
+        # for k, v in capped_prism_data_by_layers.items():
+        #     print(k, [_v[1].shape for _v in v])
+        # sorted_layer_heights = sorted(list(capped_prism_data_by_layers.keys()), 
+        #                               key=lambda h: int(layer_elements[h] <= REs),
+        #                               reverse=True)
 
         left_plot, right_plot = st.columns(2)
-        
+
         with left_plot:
             plt.close()
             fig = plt.figure()
             fig.set_size_inches(non_layer_lengths)
             ax = plt.gca()
             ax.set_aspect('equal', adjustable='box')
-            
-            plt.plot([0., unitcell_lengths[0]], [0., 0.], c='k', alpha=0.5, lw=ce)
-            plt.plot([0., x1], [0., y1], c='k', alpha=0.5, lw=ce)
-            plt.plot([x1, x1+unitcell_lengths[0]], [y1, y1], c='k', alpha=0.5, lw=ce)
-            plt.plot([unitcell_lengths[0], x1+unitcell_lengths[0]], [0., y1], c='k', alpha=0.5, lw=ce)
 
             # add points
             height = sorted_layer_heights[0]
             layer_contents = capped_prism_data_by_layers[height]
             # for height, layer_contents in capped_prism_data_by_layers.items():
             shade = layer_elements[height] <= REs
+            shade = True
 
             for center_coordinate, prism, edges, caps in layer_contents:
                 hull = ConvexHull(prism)
@@ -271,15 +297,53 @@ if uploaded_file is not None:
                         alpha=0.7,
                         lw=lw)
 
+                    if shade_prisms:
+                        # order edges
+                        ordered_edges = [edges[0]]
+                        added = [0]
+
+                        for _ in range(len(prism) - 1):
+                            last_i = ordered_edges[-1][-1]
+
+                            sel_i = [i for i in range(len(prism)) if i not in added and last_i in edges[i]][0]
+                            if edges[sel_i][0] == last_i:
+                                ordered_edges.append(edges[sel_i])
+                            else:
+                                ordered_edges.append([edges[sel_i][1], edges[sel_i][0]])
+                            added.append(sel_i)
+                        
+                        edges = ordered_edges
+
+                        tx, ty = [], []
+                        for inds in edges:
+                            tx.extend([float(prism[inds[0]][0]), float(prism[inds[1]][0])])
+                            ty.extend([float(prism[inds[0]][1]), float(prism[inds[1]][1])])
+                        
+                        if len(prism) == 3:
+                            cn_col = 'r' 
+                        else:
+                            cn_col = 'g'
+
+                        plt.fill(tx, ty, color=cn_col, alpha=0.5, edgecolor=cn_col)
+
             legends = []
+            atom_heights = [sround(float(p[0][layer_axis])) for p in atoms_to_plot]
+            atom_heights = list(set(atom_heights))
+            atom_heights.remove(sround(cell_height))
+            atom_heights = np.array(atom_heights)
+
+
             for p in atoms_to_plot:
                 sy = site_symbol_map[p[1]]
                 s = p[1]
                 lh = p[0][layer_axis]
-                # print('l', height, sround(lh), lh)
-                # if not is_close(height, sround(lh)):
-                #     continue
-                m = markers[int(np.argmin(np.abs(layer_heights - lh)))]
+                if abs(lh - cell_height) < 0.1:
+                    lh -= cell_height
+
+                if separate_atoms_by_layer and not is_close(height, sround(lh)):
+                    continue
+
+                m = markers[int(np.argmin(np.abs(atom_heights - lh)))]
                 
                 size = ms if m != "." else int(ms*2)
 
@@ -298,6 +362,17 @@ if uploaded_file is not None:
                     plt.text(p[0]-(p[0]*0.025), p[1]-(p[1]*0.035), s, size=20)
 
             bby, ymax, ymin, xmax, xmin = get_bbox_y(atoms_to_plot, non_layer_axes)
+
+            bby = top_cols[3].number_input(
+                label="Legend position:",
+                value=bby,   # Default value
+            )
+
+            plt.plot([0., unitcell_lengths[0]], [0., 0.], c='k', alpha=0.5, lw=ce)
+            plt.plot([0., x1], [0., y1], c='k', alpha=0.5, lw=ce)
+            plt.plot([x1, x1+unitcell_lengths[0]], [y1, y1], c='k', alpha=0.5, lw=ce)
+            plt.plot([unitcell_lengths[0], x1+unitcell_lengths[0]], [0., y1], c='k', alpha=0.5, lw=ce)
+
             plt.legend(ncol=len(legends),  bbox_to_anchor=(0.5, bby), framealpha=0, loc="lower center", fontsize=16, columnspacing=0.1)
             plt.title(title, y=1.01, size=16)
             plt.axis('off')
@@ -325,11 +400,7 @@ if uploaded_file is not None:
             fig.set_size_inches(non_layer_lengths)
             ax = plt.gca()
             ax.set_aspect('equal', adjustable='box')
-            
-            plt.plot([0., unitcell_lengths[0]], [0., 0.], c='k', alpha=0.5, lw=ce)
-            plt.plot([0., x1], [0., y1], c='k', alpha=0.5, lw=ce)
-            plt.plot([x1, x1+unitcell_lengths[0]], [y1, y1], c='k', alpha=0.5, lw=ce)
-            plt.plot([unitcell_lengths[0], x1+unitcell_lengths[0]], [0., y1], c='k', alpha=0.5, lw=ce)
+        
 
             # add points
             height = sorted_layer_heights[1]
@@ -337,6 +408,7 @@ if uploaded_file is not None:
             # for height, layer_contents in capped_prism_data_by_layers.items():
             shade = layer_elements[height] <= REs
 
+            shade = True
             for center_coordinate, prism, edges, caps in layer_contents:
                 hull = ConvexHull(prism)
                 edges = []
@@ -352,13 +424,41 @@ if uploaded_file is not None:
                         alpha=0.7,
                         lw=lw)
 
+                if shade_prisms:
+                    # order edges
+                    ordered_edges = [edges[0]]
+                    added = [0]
+
+                    for _ in range(len(prism) - 1):
+                        last_i = ordered_edges[-1][-1]
+
+                        sel_i = [i for i in range(len(prism)) if i not in added and last_i in edges[i]][0]
+                        if edges[sel_i][0] == last_i:
+                            ordered_edges.append(edges[sel_i])
+                        else:
+                            ordered_edges.append([edges[sel_i][1], edges[sel_i][0]])
+                        added.append(sel_i)
+                    
+                    edges = ordered_edges
+
+                    tx, ty = [], []
+                    for inds in edges:
+                        tx.extend([prism[inds[0]][0], prism[inds[1]][0]])
+                        ty.extend([prism[inds[0]][1], prism[inds[1]][1]])
+                    
+                    cn_col = 'g'
+                    if len(prism) == 3:
+                        cn_col = 'r' 
+                        
+                    plt.fill(tx, ty, color=cn_col, alpha=0.5, edgecolor=cn_col)
+
             legends = []
             for p in atoms_to_plot:
                 sy = site_symbol_map[p[1]]
                 s = p[1]
                 lh = p[0][layer_axis]
-                # if not is_close(height, sround(lh)):
-                #     continue
+                if separate_atoms_by_layer and not is_close(height, sround(lh)):
+                    continue
                 m = markers[int(np.argmin(np.abs(layer_heights - lh)))]
                 
                 size = ms if m != "." else int(ms*2)
@@ -377,7 +477,12 @@ if uploaded_file is not None:
                 if show_labels:
                     plt.text(p[0]-(p[0]*0.025), p[1]-(p[1]*0.035), s, size=20)
 
-            bby, ymax, ymin, xmax, xmin = get_bbox_y(atoms_to_plot, non_layer_axes)
+            plt.plot([0., unitcell_lengths[0]], [0., 0.], c='k', alpha=0.5, lw=ce)
+            plt.plot([0., x1], [0., y1], c='k', alpha=0.5, lw=ce)
+            plt.plot([x1, x1+unitcell_lengths[0]], [y1, y1], c='k', alpha=0.5, lw=ce)
+            plt.plot([unitcell_lengths[0], x1+unitcell_lengths[0]], [0., y1], c='k', alpha=0.5, lw=ce)
+
+            # bby, ymax, ymin, xmax, xmin = get_bbox_y(atoms_to_plot, non_layer_axes)
             plt.legend(ncol=len(legends),  bbox_to_anchor=(0.5, bby), framealpha=0, loc="lower center", fontsize=16, columnspacing=0.1)
             plt.title(title, y=1.01, size=16)
             plt.axis('off')

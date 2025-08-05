@@ -19,7 +19,6 @@ def rearrange_coordinates(points):
         return []
 
     centroid = points.mean(axis=0)
-    # print(centroid)
     angles = np.arctan2(points[:, 1] - centroid[1], points[:, 0] - centroid[0])
     sorted_points = points[np.argsort(angles)]
     sorted_points = [tuple([float(point[0]), float(point[1])]) for point in sorted_points]
@@ -47,7 +46,7 @@ def sround(val):
 
 
 def get_sg_symbol(cif_path):
-    # print(cif_path)
+
     sgs = {'P121/m1': 'P2_1/m', 'P-62m': 'P\\bar{6}2m', 'I41md': 'I4_1md', 
            'P-6m2': 'P\\bar{6}m2', 'P-6': 'P\\bar{6}', 'C12/m1': 'C2/m', 
            'P42/mnm': 'P4_2mnm', 'Pmn21': 'Pmn2_1', 'Pmc21': 'Pmc2_1', 
@@ -61,7 +60,7 @@ def get_sg_symbol(cif_path):
                 sgs[k] = v[:-1].replace("$", "")
     
     with open(cif_path, 'r') as f:
-        # print(cif_path)
+
         lines = f.readlines()
         i_start = [i for i in range(len(lines)) if "_space_group_name_H-M_alt" in lines[i]][0]
         i_end = [i for i in range(i_start, len(lines)) if "loop_" in lines[i]][0]
@@ -124,8 +123,6 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
         i for i in range(len(points_wd)) \
             if round(points_wd[i][2][layer_axis], 2) == round(center[layer_axis], 2)]
     
-    # print("119", center[layer_axis], [p[2][layer_axis] for p in points_wd])
-    # print([p[-1] for p in points_wd])
     capping_atoms = [
         p for p in points_wd if abs(float(p[2][layer_axis]) - center[layer_axis]) <= 0.2]
 
@@ -161,7 +158,6 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
         assert len(np.unique(v, axis=1) == 3), f"{site}, {len(v)}"
     
     # pair capping atoms to square edges
-    # print([[k, len(v)] for k, v in prism_sites_by_heights.items()], num_prism_atoms)
     layer_1 = sorted([k for k in prism_sites_by_heights.keys() if len(prism_sites_by_heights[k])==int(num_prism_atoms/2)])
 
     if len(layer_1):
@@ -217,14 +213,14 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
         return capped_prism_data
     
     # check for capping atoms for all faces
-    cap_atom_present = []
-    for i, face in enumerate(faces):
+    # cap_atom_present = []
+    # for i, face in enumerate(faces):
 
-        _has_capped_atom = has_capped_atom(face_points=face_points, 
-                                           face_indices=face,
-                                           capping_atoms=capping_atoms,
-                                           non_layer_axes=non_layer_axes)
-        cap_atom_present.append(_has_capped_atom)
+    #     _has_capped_atom = has_capped_atom(face_points=face_points, 
+    #                                        face_indices=face,
+    #                                        capping_atoms=capping_atoms,
+    #                                        non_layer_axes=non_layer_axes)
+    #     cap_atom_present.append(_has_capped_atom)
       
     # if all(cap_atom_present):
     capped_prism_data['capped_prism_present'] = True
@@ -233,7 +229,7 @@ def get_capped_prism_data(site, layer_axis, points_wd, CN):
     capped_prism_data['caps'] = capping_atoms
     capped_prism_data['prism_full'] = prism
 
-    capped_prism_data['cap_for_faces'] = cap_atom_present
+    # capped_prism_data['cap_for_faces'] = cap_atom_present
 
     return capped_prism_data
 
@@ -287,7 +283,6 @@ def point_in_hull(poly, point):
         new_hull = ConvexHull(np.concatenate((poly, [point])))
         return np.array_equal(new_hull.vertices, hull.vertices)
     except:
-        # print("ConvexHull Error", traceback.format_exc())
         return False
 
 
@@ -446,8 +441,8 @@ def get_data(cif_path, CN):
         for site, points_wd in conns.items():
             CN_vals = CN_numbers_of_site(points_wd)
             ncnp_cif["CNs"] = CN_vals
-            if not CN in CN_vals[:10] and not int(CN*2/3) in CN_vals[:10]:
-                continue
+            # if not CN in CN_vals[:10] and not int(CN*2/3) in CN_vals[:10]:
+            #     continue
             
             points_wd = sorted(points_wd, key=lambda x: x[0])  # make sorting consistent
             points_wd = sorted(points_wd, key=lambda x: x[1])[:CN]
@@ -456,7 +451,7 @@ def get_data(cif_path, CN):
                                         layer_axis=layer_index,
                                         points_wd=points_wd.copy(),
                                         CN=CN)
-            print(site_capped_prims_data)
+
             if site_capped_prims_data['capped_prism_present']:
                 site_capped_prims_data['center_element'] = site_symbol_map[site]
                 site_capped_prims_data['coordination_formula'] = get_formula(points_wd, site_symbol_map)
