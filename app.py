@@ -75,6 +75,8 @@ if uploaded_file is not None:
         temp_file_path = temp_file.name
         
         cif = Cif(temp_file_path)
+        cif.compute_connections()
+        cif.compute_CN()
         unitcell_lengths = cif.unitcell_lengths
         unitcell_angles = cif.unitcell_angles
         unitcell_points = cif.unitcell_points
@@ -144,6 +146,35 @@ if uploaded_file is not None:
         # TCTPs
         prism_and_cap_xys = []
         sites_with_envs = set()
+        conns = cif.connections
+
+        for site, neighbors in conns.items():
+            neighbors = sorted(neighbors, key=lambda x: x[1])[:22]
+            neighbor_heights = [sround(abs(n[3][layer_axis]-n[2][layer_axis])) for n in neighbors]
+            neighbor_heights = [h for h in neighbor_heights if h > 0.1]
+            min_distance = min(neighbor_heights) - 0.1
+
+            neighbors = [neighbor for neighbor in neighbors if abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= min_distance]
+            sorted_neighbors = []
+            nn = len(neighbors)
+            for i in range(nn):
+                for j in range(i+1, nn):
+
+                    if neighbors[i][3][layer_axis] == neighbors[j][3][layer_axis]:
+                        continue
+
+                    if np.allclose(np.array(neighbors[i][3])[non_layer_axes], np.array(neighbors[j][3])[non_layer_axes]):
+                        if neighbors[i][3][layer_axis] > neighbors[j][3][layer_axis]:
+                            sorted_neighbors.append(neighbors[i])
+                        else:
+                            sorted_neighbors.append(neighbors[j])
+
+            # determine square vs triangle
+            print(site, len(sorted_neighbors))
+
+
+
+
         for CN in [12, 9]:
             cif_data = get_data(temp_file_path, CN=CN)
             if 'site_data' not in cif_data:
@@ -184,9 +215,6 @@ if uploaded_file is not None:
 
                         if not any(prism_atom_inside_cell):
                             continue
-
-                        if k == "Si":
-                            print(atom)
 
                         caps = atom_capped_prims_data['caps']
                         edges = atom_capped_prims_data['edges']
