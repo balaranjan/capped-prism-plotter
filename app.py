@@ -146,31 +146,31 @@ if uploaded_file is not None:
         # TCTPs
         prism_and_cap_xys = []
         sites_with_envs = set()
-        conns = cif.connections
+        # conns = cif.connections
 
-        for site, neighbors in conns.items():
-            neighbors = sorted(neighbors, key=lambda x: x[1])[:22]
-            neighbor_heights = [sround(abs(n[3][layer_axis]-n[2][layer_axis])) for n in neighbors]
-            neighbor_heights = [h for h in neighbor_heights if h > 0.1]
-            min_distance = min(neighbor_heights) - 0.1
+        # for site, neighbors in conns.items():
+        #     neighbors = sorted(neighbors, key=lambda x: x[1])[:22]
+        #     neighbor_heights = [sround(abs(n[3][layer_axis]-n[2][layer_axis])) for n in neighbors]
+        #     neighbor_heights = [h for h in neighbor_heights if h > 0.1]
+        #     min_distance = min(neighbor_heights) - 0.1
 
-            neighbors = [neighbor for neighbor in neighbors if abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= min_distance]
-            sorted_neighbors = []
-            nn = len(neighbors)
-            for i in range(nn):
-                for j in range(i+1, nn):
+        #     neighbors = [neighbor for neighbor in neighbors if abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= min_distance]
+        #     sorted_neighbors = []
+        #     nn = len(neighbors)
+        #     for i in range(nn):
+        #         for j in range(i+1, nn):
 
-                    if neighbors[i][3][layer_axis] == neighbors[j][3][layer_axis]:
-                        continue
+        #             if neighbors[i][3][layer_axis] == neighbors[j][3][layer_axis]:
+        #                 continue
 
-                    if np.allclose(np.array(neighbors[i][3])[non_layer_axes], np.array(neighbors[j][3])[non_layer_axes]):
-                        if neighbors[i][3][layer_axis] > neighbors[j][3][layer_axis]:
-                            sorted_neighbors.append(neighbors[i])
-                        else:
-                            sorted_neighbors.append(neighbors[j])
+        #             if np.allclose(np.array(neighbors[i][3])[non_layer_axes], np.array(neighbors[j][3])[non_layer_axes]):
+        #                 if neighbors[i][3][layer_axis] > neighbors[j][3][layer_axis]:
+        #                     sorted_neighbors.append(neighbors[i])
+        #                 else:
+        #                     sorted_neighbors.append(neighbors[j])
 
-            # determine square vs triangle
-            print(site, len(sorted_neighbors))
+        #     # determine square vs triangle
+        #     print(site, len(sorted_neighbors))
 
 
 
