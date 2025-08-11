@@ -283,7 +283,55 @@ def point_in_hull(poly, point):
         new_hull = ConvexHull(np.concatenate((poly, [point])))
         return np.array_equal(new_hull.vertices, hull.vertices)
     except:
+        # print("err ch_hull", len(poly), poly)
+        # print(traceback.format_exc())
         return False
+    
+
+def has_prism(neighbors, non_layer_axes, n):
+    neighbors =sorted(neighbors, key=lambda x: x[1])[:n]
+    center = np.array(neighbors[0][2])
+    points = [np.array(p[3]) for p in neighbors]
+    
+    stdev = -1
+    if len(points) < 6:
+        return False, -1
+    
+    inside = point_in_hull(points, center)
+    
+    if inside:
+        lengths = []
+        for i in range(n):
+            lengths.append(np.linalg.norm(points[i][non_layer_axes]-center[non_layer_axes]))
+            # for j in range(i+1, n):
+            #     lengths.append(np.linalg.norm(points[i]-points[j]))
+
+        lengths = sorted(lengths)
+        # print(lengths)
+        stdev = np.std(lengths[:n])
+
+        avg = np.vstack([point for point in points]).mean(axis=0)
+        # print(avg.shape)
+        stdev = np.linalg.norm(avg-center)
+
+    return inside, stdev
+
+
+def find_most_suitable_prism(neighbors, non_layer_axes):
+    prism_metrics = []
+    n_max = int(len(neighbors)/2) + 1
+
+    for n in range(3, n_max):
+        prism, stdev = has_prism(neighbors, non_layer_axes, n*2)
+        if prism:
+            prism_metrics.append([n, round(float(stdev), 3)])
+
+    if len(prism_metrics):
+        prism_metrics = sorted(prism_metrics, key=lambda x: x[0], reverse=True)
+        prism_metrics = sorted(prism_metrics, key=lambda x: x[1])
+        print("\nPM", prism_metrics)
+        return prism_metrics[0][0]
+    return None
 
 
 def CN_numbers_of_site(v):
@@ -405,6 +453,25 @@ def get_colors(site_symbol_map):
     return cpd_colors
 
 
+def get_points(points_wd, center, layer_axis, N):
+    points = []
+    center_height = center[layer_axis]
+
+    for p in points_wd:
+        if abs(p[2][layer_axis] - center_height) <= 0.2:
+            points.append(p)
+            if len(points) == int(N/3):
+                break
+
+    for p in points_wd:
+        if abs(p[2][layer_axis] - center_height) > 0.2:
+            points.append(p)
+            if len(points) == N:
+                break
+
+    return points
+
+
 def get_data(cif_path, CN):
     
     # get capped prisms data for the cif.
@@ -447,11 +514,12 @@ def get_data(cif_path, CN):
             points_wd = sorted(points_wd, key=lambda x: x[0])  # make sorting consistent
             points_wd = sorted(points_wd, key=lambda x: x[1])[:CN]
 
+            # points_wd = get_points(points_wd, center=)
+
             site_capped_prims_data = get_capped_prism_data(site=site,
                                         layer_axis=layer_index,
                                         points_wd=points_wd.copy(),
                                         CN=CN)
-
             if site_capped_prims_data['capped_prism_present']:
                 site_capped_prims_data['center_element'] = site_symbol_map[site]
                 site_capped_prims_data['coordination_formula'] = get_formula(points_wd, site_symbol_map)
@@ -459,8 +527,7 @@ def get_data(cif_path, CN):
     
         if site_data:
             ncnp_cif['site_data'] = site_data
-        else:
-            print("NSD")
+
     else:
         print("layer index is None")
     return ncnp_cif
