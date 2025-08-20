@@ -329,8 +329,13 @@ def find_most_suitable_prism(neighbors, non_layer_axes):
     if len(prism_metrics):
         prism_metrics = sorted(prism_metrics, key=lambda x: x[0], reverse=True)
         prism_metrics = sorted(prism_metrics, key=lambda x: x[1])
+        selected = prism_metrics[0]
+        if len(prism_metrics) > 1:
+            for n, s in prism_metrics:
+                if n > selected[0] and abs(s - selected[1]) < 0.03:
+                    selected = [n, s]
         print("\nPM", prism_metrics)
-        return prism_metrics[0][0]
+        return selected[0]
     return None
 
 

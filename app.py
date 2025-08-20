@@ -128,6 +128,7 @@ if uploaded_file is not None:
         title = cif_data_1['Structure Type']
         layer_axis = cif_data_1['layer_axis']
         # layer_vals = cif_data_1['layer_vals']
+        
         non_layer_axes = cif_data_1['non_layer_axes']
         non_layer_lengths = [unitcell_lengths[l] for l in range(3) if l != layer_axis]
 
@@ -211,6 +212,7 @@ if uploaded_file is not None:
             neighbors_ud = neighbors_ud[:neighbors_with_one_center]
 
             n_prism = find_most_suitable_prism(neighbors_ud, non_layer_axes)
+            
             if n_prism:
                 prism = []
                 for i in range(0, len(neighbors_ud)):
@@ -322,7 +324,7 @@ if uploaded_file is not None:
             plotted_prisms = defaultdict(list)
             for site, (layer_heights, prisms, center_heights) in prisms_in_unitcell.items():
                 for layer_height in layer_heights:
-                    print('l', site, layer_height, height, len(prisms), set(center_heights), cell_height)
+                    # print('l', site, layer_height, height, len(prisms), set(center_heights), cell_height)
                     if abs(sround(layer_height) - sround(height)) > 0.2:
                         continue
                     if not len(prisms):
@@ -461,7 +463,7 @@ if uploaded_file is not None:
 
             for site, (layer_heights, prisms, center_heights) in prisms_in_unitcell.items():
                 for layer_height in layer_heights:
-                    print('r', site, layer_height, height, len(prisms), set(center_heights), cell_height)
+                    # print('r', site, layer_height, height, len(prisms), set(center_heights), cell_height)
                     if abs(sround(layer_height) - sround(height)) > 0.2:
                         continue
                     if not len(prisms):
