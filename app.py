@@ -14,10 +14,10 @@ from cifkit.utils import unit
 from collections import defaultdict
 from scipy.spatial import ConvexHull
 from matplotlib import pyplot as plt
-from cif_parser import _parse_formula, cif_to_dict
+# from cif_parser import _parse_formula, cif_to_dict
 from matplotlib.colors import to_hex
 import io
-from shapely.geometry import Polygon
+# from shapely.geometry import Polygon
 from functools import cmp_to_key
 
 st.set_page_config(layout="wide")
