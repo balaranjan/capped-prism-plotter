@@ -297,8 +297,11 @@ def has_prism(neighbors, non_layer_axes, n):
     if len(points) < 6:
         return False, -1
     
-    inside = point_in_hull(points, center)
-    
+    if len(points) != len(ConvexHull(points).vertices):
+        inside = False
+    else:
+        inside = point_in_hull(points, center)
+
     if inside:
         lengths = []
         for i in range(n):
@@ -315,6 +318,22 @@ def has_prism(neighbors, non_layer_axes, n):
         stdev = np.linalg.norm(avg-center)
 
     return inside, stdev
+
+
+def get_prism_metrics(neighbors, non_layer_axes):
+    prism_metrics = []
+    n_max = int(len(neighbors)/2) + 1
+
+    for n in range(3, n_max):
+        prism, stdev = has_prism(neighbors, non_layer_axes, n*2)
+        if prism:
+            prism_metrics.append([n, round(float(stdev), 3)])
+
+    if len(prism_metrics):
+        prism_metrics = sorted(prism_metrics, key=lambda x: x[0], reverse=True)
+        prism_metrics = sorted(prism_metrics, key=lambda x: x[1])
+
+    return prism_metrics
 
 
 def find_most_suitable_prism(neighbors, non_layer_axes):
@@ -334,7 +353,7 @@ def find_most_suitable_prism(neighbors, non_layer_axes):
             for n, s in prism_metrics:
                 if n > selected[0] and abs(s - selected[1]) < 0.03:
                     selected = [n, s]
-        print("\nPM", prism_metrics)
+        # print("\nPM", prism_metrics)
         return selected[0]
     return None
 

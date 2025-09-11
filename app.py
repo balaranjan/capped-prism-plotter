@@ -4,7 +4,7 @@ from cifkit import Cif
 from utils import get_data, get_colors, adjust_xyz, get_first_n_neighbors, get_formula
 from utils import sround, format_formula, get_sg_symbol
 from utils import get_bbox_y, rearrange_coordinates, is_close, has_prism, find_most_suitable_prism
-from utils import get_capped_prism_data, point_in_hull
+from utils import get_capped_prism_data, point_in_hull, get_prism_metrics
 import os
 import traceback
 import numpy as np
@@ -17,6 +17,8 @@ from matplotlib import pyplot as plt
 from cif_parser import _parse_formula, cif_to_dict
 from matplotlib.colors import to_hex
 import io
+from shapely.geometry import Polygon
+from functools import cmp_to_key
 
 st.set_page_config(layout="wide")
 
@@ -35,9 +37,114 @@ REs = set(REs)
 fig = None
 # left_col, right_col = st.columns([1, 3])
 
-top_cols = st.columns(4)
+st.set_page_config(page_title="Prism Plotter")
+st.markdown(
+    "<h1 style='text-align: center;'>Prism Plotter</h1>",
+    unsafe_allow_html=True
+)
+top_cols = st.columns([1, 1])
 
-with top_cols[1]:
+# with top_cols[0]:
+#     ce = st.number_input(
+#                 label="Cell edge width:",
+#                 min_value=1,
+#                 max_value=10,
+#                 value=3,   # Default value
+#                 step=1
+#             )
+
+#     lw = st.number_input(
+#         label="Line width:",
+#         min_value=1,
+#         max_value=10,
+#         value=3,   # Default value
+#         step=1
+#     )
+
+#     ms = st.number_input(
+#             label="Marker size:",
+#             min_value=1,
+#             max_value=1000,
+#             value=300,   # Default value
+#             step=1
+#         )
+
+# plot_options = top_cols[0].columns(2)
+# separate_atoms_by_layer = plot_options[0].toggle("Separate atoms by layer", value=False)
+# shade_prisms = plot_options[1].toggle("Shade prisms", value=True)
+# label_options = top_cols[0].columns(2)
+# show_labels = label_options[0].toggle("Show labels", value=False)
+# swap_layers = label_options[1].toggle("Swap layers", value=False)
+
+# top_cols[2].write("Prisms")
+# env_cols_1 = top_cols[2].columns(6)
+# env_cols_1[0].write("All")
+
+# env_3 = env_cols_1[1].toggle("3", value=True, key='all3')
+# env_4 = env_cols_1[2].toggle("4", value=True, key='all4')
+# env_5 = env_cols_1[3].toggle("5", value=True, key='all5')
+# env_6 = env_cols_1[4].toggle("6", value=True, key='all6')
+# env_7 = env_cols_1[5].toggle("7", value=True, key='all7')
+
+# allowed_envs = []
+# if env_3:
+#     allowed_envs.append(3*2)
+# if env_4:
+#     allowed_envs.append(4*2)
+# if env_5:
+#     allowed_envs.append(5*2)
+# if env_6:
+#     allowed_envs.append(6*2)
+# if env_7:
+#     allowed_envs.append(7*2)
+
+
+def overlap_present(site_neighbors_ud, prism, non_layer_axes, plot=False):
+    prism = sorted(prism, key=lambda x: x[1])
+
+    site_neighbors_ud = sorted(site_neighbors_ud, key=lambda x: x[1])
+    site_neighbors_ud = np.vstack([p[-1][non_layer_axes] for p in site_neighbors_ud])
+
+    commom_vertices = [int((np.linalg.norm(site_neighbors_ud - p[-1][non_layer_axes],axis=1) < 0.1).astype(int).sum()) for p in prism]
+
+    return sum(commom_vertices) > 8
+
+def get_non_overlapping_prism(site_neighbors_ud, site_prism_metrics, selected_prisms):
+
+    def custom_cmp(a, b):
+        if abs(b[1] - a[1]) <= 0.03:
+            res = -1 if (a[0] - b[0]) > 0 else 1
+        else:
+            res = a[1] - b[1]
+        return res
+
+    
+    site_prism_metrics = sorted(site_prism_metrics, key=cmp_to_key(custom_cmp))
+    if not len(selected_prisms):
+        return site_prism_metrics[0][0]
+    
+    selected = None
+    for n, _ in site_prism_metrics:
+        overlap = []
+        for k, prism in selected_prisms.items():
+            overlap.append(overlap_present(site_neighbors_ud[:n*2], prism, non_layer_axes, plot=k=='Ir1'))
+        if not any(overlap):
+            return n
+    return selected
+
+with top_cols[0]:
+    uploaded_file = st.file_uploader("Choose a file")
+
+top_cols[0].write("Plot Options")
+plot_options_container = top_cols[0].container(border=True)
+plot_options = plot_options_container.columns(2)
+separate_atoms_by_layer = plot_options[0].toggle("Separate atoms by layer", value=False)
+shade_prisms = plot_options[1].toggle("Shade prisms", value=True)
+label_options = plot_options_container.columns(2)
+show_labels = label_options[0].toggle("Show labels", value=False)
+swap_layers = label_options[1].toggle("Swap layers", value=False)
+
+with plot_options_container:
     ce = st.number_input(
                 label="Cell edge width:",
                 min_value=1,
@@ -62,44 +169,14 @@ with top_cols[1]:
             step=1
         )
 
-plot_options = top_cols[3].columns(2)
-separate_atoms_by_layer = plot_options[0].toggle("Separate atoms by layer", value=False)
-shade_prisms = plot_options[1].toggle("Shade prisms", value=True)
-label_options = top_cols[3].columns(2)
-show_labels = label_options[0].toggle("Show labels", value=False)
-swap_layers = label_options[1].toggle("Swap layers", value=False)
-
-top_cols[3].write("Prisms")
-env_cols_1 = top_cols[3].columns(3)
-env_3 = env_cols_1[0].toggle("3", value=True)
-env_4 = env_cols_1[1].toggle("4", value=True)
-env_5 = env_cols_1[2].toggle("5", value=True)
-
-env_cols_2 = top_cols[3].columns(3)
-env_6 = env_cols_2[0].toggle("6", value=True)
-env_7 = env_cols_2[1].toggle("7", value=True)
-
-allowed_envs = []
-if env_3:
-    allowed_envs.append(3*2)
-if env_4:
-    allowed_envs.append(4*2)
-if env_5:
-    allowed_envs.append(5*2)
-if env_6:
-    allowed_envs.append(6*2)
-if env_7:
-    allowed_envs.append(7*2)
-
-with top_cols[0]:
-    uploaded_file = st.file_uploader("Choose a file")
-
 if uploaded_file is not None:
     file_name = uploaded_file.name
     with NamedTemporaryFile(delete=False) as temp_file:
-        print("\n\n", "NEW")
         temp_file.write(uploaded_file.getvalue())
         temp_file_path = temp_file.name
+
+        cif_name = uploaded_file.name[:-4]
+        print("\n\n", "NEW", cif_name)
         
         cif = Cif(temp_file_path)
         cif.compute_connections()
@@ -113,16 +190,41 @@ if uploaded_file is not None:
         site_symbol_map = dict(zip([l for l in loop_vals[0]], [s for s in loop_vals[1]]))
         element_colors = get_colors(site_symbol_map)
         elements = list(set(list(site_symbol_map.values())))
-        cols = st.columns(len(elements)+1)
-        top_cols[2].write("Colors ")
-        color_cols = top_cols[2].columns(3)
+
+        top_cols[1].write("Colors ")
+        color_container = top_cols[1].container(border=True)
+        cols = color_container.columns(len(elements)+1)
+        color_cols = color_container.columns(len(elements)+1)
         
         for i, e in enumerate(elements, 0):
             if i > 0 and i % 3 == 0:
-                color_cols = top_cols[2].columns(3)
+                color_cols = top_cols[1].columns(3)
             current_color = to_hex(element_colors[e])
             color = color_cols[i % 3].color_picker(f'{e}', current_color)
             element_colors[e] = color
+
+        top_cols[1].write("Prisms")
+        container = top_cols[1].container(border=True)
+        env_cols_1 = container.columns(6)
+        env_cols_1[0].write("All sites")
+
+        env_3 = env_cols_1[1].toggle("3", value=True, key='all3')
+        env_4 = env_cols_1[2].toggle("4", value=True, key='all4')
+        env_5 = env_cols_1[3].toggle("5", value=True, key='all5')
+        env_6 = env_cols_1[4].toggle("6", value=True, key='all6')
+        env_7 = env_cols_1[5].toggle("7", value=True, key='all7')
+
+        allowed_envs = []
+        if env_3:
+            allowed_envs.append(3*2)
+        if env_4:
+            allowed_envs.append(4*2)
+        if env_5:
+            allowed_envs.append(5*2)
+        if env_6:
+            allowed_envs.append(6*2)
+        if env_7:
+            allowed_envs.append(7*2)
 
         cif_data_1 = get_data(temp_file_path, CN=9)
         title = cif_data_1['Structure Type']
@@ -180,6 +282,7 @@ if uploaded_file is not None:
             
         prism_info_by_site = {}
         prisms_in_unitcell = {}
+        prism_metrics = []
         atoms_in_middle = [atom for atom in supercell_points if -0.1 <= atom[0][layer_axis] <= cell_height+0.1]
 
         for site, neighbors in conns.items():
@@ -187,9 +290,16 @@ if uploaded_file is not None:
             neighbors_ud = [neighbor for neighbor in neighbors if cell_height-0.1 > abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= 0.2]
             neighbors_c_2d = [np.array(neighbor[3])[non_layer_axes] for neighbor in neighbors if abs(neighbor[3][layer_axis])-abs(neighbor[2][layer_axis]) < 0.2]
             neighbors_c = [neighbor for neighbor in neighbors if abs(neighbor[3][layer_axis])-abs(neighbor[2][layer_axis]) < 0.2]
-
-            neighbors_with_one_center = None
+            
             center = np.array(neighbors[0][2])[non_layer_axes]
+            middle_layer_neighbor_dist_2D = [np.linalg.norm(center - np.array(p[-1])[non_layer_axes]) for p in neighbors_c]
+            middle_layer_neighbor_dist_2D = [d for d in middle_layer_neighbor_dist_2D if d > 0.1]
+            min_middle_layer_neighbor_dist_2D = -1
+            if len(middle_layer_neighbor_dist_2D):
+                min_middle_layer_neighbor_dist_2D = min(middle_layer_neighbor_dist_2D)
+            #     neighbors_ud = [neighbor for neighbor in neighbors_ud if np.linalg.norm(np.array(neighbor[-1])[non_layer_axes] - center) <= min_middle_layer_neighbor_dist_2D]
+            # print("235", site, round(min_middle_layer_neighbor_dist_2D, 3), [[p[0], round(float(np.linalg.norm(np.array(p[-1])[non_layer_axes] - center)), 3)] for p in neighbors_ud], len(neighbors_ud))
+            neighbors_with_one_center = None
             
             for n in range(6, len(neighbors_ud)+1, 2):
                 poly_2d = []
@@ -211,9 +321,55 @@ if uploaded_file is not None:
 
             neighbors_ud = neighbors_ud[:neighbors_with_one_center]
 
-            n_prism = find_most_suitable_prism(neighbors_ud, non_layer_axes)
+            pm = get_prism_metrics(neighbors_ud, non_layer_axes)
+            prism_metrics.append([site, pm, neighbors_ud])
+        
+        prism_metrics = sorted(prism_metrics, key=lambda x: min([v[1] for v in x[1]]))
             
-            if n_prism:
+
+        selected_prisms = {}
+        c = 0
+
+        top_cols[1].markdown("Site Selection  \nn of prism (distance between center site coordinate and the center of prism)")
+        sites_container = top_cols[1].container(border=True)
+        for site, pm, neighbors_ud in prism_metrics:
+
+            info = {v[0]: f"{v[0]} ({v[1]})" for v in pm}
+            def inline_label(opt):
+                return f"{info[opt]}"
+            
+            site_neighbors_ud = []
+            for i in range(0, len(neighbors_ud)):
+                site_neighbors_ud.append([*neighbors_ud[i][:2], np.array(neighbors_ud[i][3])])
+
+            selected = get_non_overlapping_prism(site_neighbors_ud, pm, selected_prisms)
+            # print(site, selected)
+            
+            if len(pm) > 1:
+                container = sites_container.container(border=True)
+                env_cols_2 = container.columns([1, 5])
+                env_cols_2[0].write(f"Site {site}")
+                values = sorted([v[0] for v in pm])
+                selected = env_cols_2[1].radio(
+                    f"Site {site}",
+                    values,
+                    index=values.index(selected),
+                    horizontal=True,
+                    format_func=inline_label,
+                    key=f"{site}-{c}-{cif_name}",
+                    label_visibility="collapsed"
+                )
+                c += 1
+            
+
+            if selected:
+                n_prism = selected
+                prism = []
+                for i in range(0, len(neighbors_ud)):
+                    prism.append([*neighbors_ud[i][:2], np.array(neighbors_ud[i][3])])
+                prism = prism[:n_prism*2]
+                selected_prisms[site] = prism
+            
                 prism = []
                 for i in range(0, len(neighbors_ud)):
                     prism.append([np.array(neighbors_ud[i][3]), neighbors_ud[i][:2]])
@@ -266,22 +422,15 @@ if uploaded_file is not None:
                             prism_and_cap_xys.append(atom[0][non_layer_axes])
                 
                             lh = a_neighbors[0][2][layer_axis]
-                            # if lh >= cell_height:
-                            #     lh -= cell_height
-                            # if lh < 0.0:
-                            #     lh += cell_height
 
                             uc_layer_heights.add(lh)
 
                 prisms_in_unitcell[site] = [uc_layer_heights, envs_in_extended_cell, center_heights]
-                print("Counts", site, len(envs_in_extended_cell), uc_layer_heights)
 
+        prism_metrics = sorted(prism_metrics, key=lambda x: x[1][0][1])
 
-        print("\n\npibs")
-        for k, v in prism_info_by_site.items():
-            print(k, len(v[1]), v)
-
-        left_plot, right_plot = st.columns(2)
+        plot_containers = st.container(border=True)
+        left_plot, right_plot = plot_containers.columns(2)
         atoms_to_plot = []
         layer_elements = defaultdict(set)
 
@@ -336,16 +485,14 @@ if uploaded_file is not None:
                     for prism, center_height in zip(prisms, center_heights):
                         if abs(center_height - height) > 0.2:
                             #  and abs(center_height-cell_height) - abs(height) > 0.2
-                            print("skipping", center_height, height)
+                            # print("skipping", center_height, height)
                             continue
                         prism = np.array(prism)
                         prism = prism[np.argsort(prism[:, 0])]
                         prism = prism[np.argsort(prism[:, 1])]
                         if any([np.all(np.allclose(prism, t, atol=1e-2, rtol=1e-2)) for t in plotted_prisms[len(prism)]]):
                             continue
-                        
-                        if site == "Pb1":
-                            print(cell_height, prism.ravel().tolist())
+
                         hull = ConvexHull(prism)
                         edges = []
                         for simplex in hull.simplices:
@@ -419,7 +566,7 @@ if uploaded_file is not None:
 
         bby, ymax, ymin, xmax, xmin = get_bbox_y(atoms_to_plot, non_layer_axes)
 
-        bby = top_cols[2].number_input(
+        bby = plot_options_container.number_input(
             label="Legend position:",
             value=bby,   # Default value
         )
@@ -448,7 +595,7 @@ if uploaded_file is not None:
                 mime="image/png",
                 key='left'
             )
-        print("\nheights", layer_heights, atom_heights)
+        # print("\nheights", layer_heights, atom_heights)
         with right_plot:
             height = atom_heights[1]
             plt.close()
