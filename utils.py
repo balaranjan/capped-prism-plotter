@@ -506,7 +506,16 @@ def get_data(cif_path, CN):
 
     loop_vals = cif._loop_values
     site_symbol_map = dict(zip([l for l in loop_vals[0]], [s for s in loop_vals[1]]))
-    unitcell_coordinates = np.array([c[:-1] for c in unitcell_points if site_symbol_map[c[-1]] != "H"])
+    _unitcell_coordinates = [c[:-1] for c in unitcell_points if site_symbol_map[c[-1]] != "H"]
+    unitcell_coordinates = []
+
+    for up in _unitcell_coordinates:
+        up = np.array(up)
+        up[up > 1.0] -= 1.0
+        up[up < 0.0] += 1.0
+        unitcell_coordinates.append(up)
+    unitcell_coordinates = np.vstack(unitcell_coordinates)
+    # print(unitcell_coordinates.shape)
     
     layer_vals, layer_index = None, None
     for i in range(3):

@@ -230,7 +230,7 @@ if uploaded_file is not None:
         title = cif_data_1['Structure Type']
         layer_axis = cif_data_1['layer_axis']
         # layer_vals = cif_data_1['layer_vals']
-        
+
         non_layer_axes = cif_data_1['non_layer_axes']
         non_layer_lengths = [unitcell_lengths[l] for l in range(3) if l != layer_axis]
 
