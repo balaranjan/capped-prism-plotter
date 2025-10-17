@@ -297,8 +297,7 @@ if uploaded_file is not None:
             min_middle_layer_neighbor_dist_2D = -1
             if len(middle_layer_neighbor_dist_2D):
                 min_middle_layer_neighbor_dist_2D = min(middle_layer_neighbor_dist_2D)
-            #     neighbors_ud = [neighbor for neighbor in neighbors_ud if np.linalg.norm(np.array(neighbor[-1])[non_layer_axes] - center) <= min_middle_layer_neighbor_dist_2D]
-            # print("235", site, round(min_middle_layer_neighbor_dist_2D, 3), [[p[0], round(float(np.linalg.norm(np.array(p[-1])[non_layer_axes] - center)), 3)] for p in neighbors_ud], len(neighbors_ud))
+
             neighbors_with_one_center = None
             
             for n in range(6, len(neighbors_ud)+1, 2):
@@ -322,8 +321,23 @@ if uploaded_file is not None:
             neighbors_ud = neighbors_ud[:neighbors_with_one_center]
 
             pm = get_prism_metrics(neighbors_ud, non_layer_axes)
-            prism_metrics.append([site, pm, neighbors_ud])
-        
+            # print(site, pm, [np.array(p[-1])[non_layer_axes] for p in neighbors_ud])
+    
+            unique_2Ds = []
+            neighbors_ud_sorted = []
+
+            for neighbor in neighbors_ud:
+                c2d = np.array(neighbor[-1])[non_layer_axes]
+
+                if len(unique_2Ds):
+                    if any(np.linalg.norm(np.vstack(unique_2Ds)-c2d, axis=1) <= 1e-3):
+                        continue
+
+                neighbors_ud_sorted.append(neighbor)
+                neighbors_ud_sorted.append(neighbor)
+                unique_2Ds.append(c2d)
+
+            prism_metrics.append([site, pm, neighbors_ud_sorted])
         prism_metrics = sorted(prism_metrics, key=lambda x: min([v[1] for v in x[1]]))
             
 
@@ -343,7 +357,6 @@ if uploaded_file is not None:
                 site_neighbors_ud.append([*neighbors_ud[i][:2], np.array(neighbors_ud[i][3])])
 
             selected = get_non_overlapping_prism(site_neighbors_ud, pm, selected_prisms)
-            # print(site, selected)
             
             if len(pm) > 1:
                 container = sites_container.container(border=True)
@@ -365,16 +378,19 @@ if uploaded_file is not None:
             if selected:
                 n_prism = selected
                 prism = []
-                for i in range(0, len(neighbors_ud)):
-                    prism.append([*neighbors_ud[i][:2], np.array(neighbors_ud[i][3])])
-                prism = prism[:n_prism*2]
+                # for i in range(0, len(neighbors_ud)):
+                #     prism.append([*neighbors_ud[i][:2], np.array(neighbors_ud[i][3])])
+                # prism = prism[:n_prism*2]
+                # print(site, selected, [p[-1][non_layer_axes] for p in prism])
                 selected_prisms[site] = prism
             
                 prism = []
                 for i in range(0, len(neighbors_ud)):
                     prism.append([np.array(neighbors_ud[i][3]), neighbors_ud[i][:2]])
                 prism = prism[:n_prism*2]
+
                 prism = sorted(prism, key=lambda x: x[0][layer_axis])[:n_prism]
+                # print(site, selected, [p[0][non_layer_axes] for p in prism])
                 prism = [[p[0][non_layer_axes], p[1]] for p in prism]
                 prism_info_by_site[site] = [sround(neighbors[0][2][layer_axis]), prism]
 
@@ -394,17 +410,34 @@ if uploaded_file is not None:
                     a_neighbors = get_first_n_neighbors(atom[:-1], supercell_points, 22)
                     a_neighbors = sorted(a_neighbors, key=lambda x: x[1])
                     a_neighbors_ud = [neighbor for neighbor in a_neighbors if cell_height-0.1 > abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= 0.2]
-                    a_prism = []
-                    asites = []
+                    # a_prism = []
+                    # asites = []
 
-                    for an in a_neighbors:
-                        if an[0] in prism_sd:
-                            # if sround(an[1]) in prism_sd[an[0]]:
-                            if any([abs(an[1] - v) < 0.1 for v in prism_sd[an[0]]]):
-                                a_prism.append(np.array(an[-1]))
-                                asites.append(an[:2])
-                    
-                    a_prism = a_prism[:n_prism*2]
+                    # for an in a_neighbors:
+                    #     if an[0] in prism_sd:
+                    #         # if sround(an[1]) in prism_sd[an[0]]:
+                    #         if any([abs(an[1] - v) < 0.1 for v in prism_sd[an[0]]]):
+                    #             a_prism.append(np.array(an[-1]))
+                    #             asites.append(an[:2])
+                    # print(a_prism)
+                    # a_prism = a_prism[:n_prism*2]
+
+                    unique_2Ds = []
+                    neighbors_ud_sorted = []
+
+                    for neighbor in a_neighbors_ud:
+                        c2d = np.array(neighbor[-1])[non_layer_axes]
+
+                        if len(unique_2Ds):
+                            if any(np.linalg.norm(np.vstack(unique_2Ds)-c2d, axis=1) <= 1e-3):
+                                continue
+
+                        neighbors_ud_sorted.append(neighbor)
+                        neighbors_ud_sorted.append(neighbor)
+                        unique_2Ds.append(c2d)
+
+                    a_neighbors_ud = neighbors_ud_sorted
+
                     a_prism = [np.array(a[-1]) for a in a_neighbors_ud[:n_prism*2]]
 
                     if len(a_prism) == n_prism*2:                        
@@ -473,7 +506,6 @@ if uploaded_file is not None:
             plotted_prisms = defaultdict(list)
             for site, (layer_heights, prisms, center_heights) in prisms_in_unitcell.items():
                 for layer_height in layer_heights:
-                    # print('l', site, layer_height, height, len(prisms), set(center_heights), cell_height)
                     if abs(sround(layer_height) - sround(height)) > 0.2:
                         continue
                     if not len(prisms):
@@ -484,8 +516,6 @@ if uploaded_file is not None:
                     
                     for prism, center_height in zip(prisms, center_heights):
                         if abs(center_height - height) > 0.2:
-                            #  and abs(center_height-cell_height) - abs(height) > 0.2
-                            # print("skipping", center_height, height)
                             continue
                         prism = np.array(prism)
                         prism = prism[np.argsort(prism[:, 0])]
@@ -595,7 +625,7 @@ if uploaded_file is not None:
                 mime="image/png",
                 key='left'
             )
-        # print("\nheights", layer_heights, atom_heights)
+
         with right_plot:
             height = atom_heights[1]
             plt.close()
@@ -610,7 +640,6 @@ if uploaded_file is not None:
 
             for site, (layer_heights, prisms, center_heights) in prisms_in_unitcell.items():
                 for layer_height in layer_heights:
-                    # print('r', site, layer_height, height, len(prisms), set(center_heights), cell_height)
                     if abs(sround(layer_height) - sround(height)) > 0.2:
                         continue
                     if not len(prisms):
@@ -623,7 +652,7 @@ if uploaded_file is not None:
 
                         if abs(center_height - height) > 0.2:
                             continue
-                        # print(prism)
+
                         prism = np.array(prism)
                         prism = prism[np.argsort(prism[:, 0])]
                         prism = prism[np.argsort(prism[:, 1])]
