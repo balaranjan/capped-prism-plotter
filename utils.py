@@ -519,7 +519,13 @@ def get_data(cif_path, CN):
     
     layer_vals, layer_index = None, None
     for i in range(3):
-        if len(np.unique(np.abs(unitcell_coordinates[:, i]))) == 2:
+        unique_coords = np.unique(np.abs(unitcell_coordinates[:, i]))
+        if 0. in unique_coords and 1.0 in unique_coords:
+            unique_coords[unique_coords==1.0] = 0.0
+            unique_coords = np.unique(unique_coords)
+        # print(unique_coords)
+
+        if len(unique_coords) == 2:
             layer_vals = np.unique(unitcell_coordinates[:, i])
             layer_index = i
             
