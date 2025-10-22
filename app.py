@@ -197,10 +197,10 @@ if uploaded_file is not None:
         color_cols = color_container.columns(len(elements)+1)
         
         for i, e in enumerate(elements, 0):
-            if i > 0 and i % 3 == 0:
-                color_cols = top_cols[1].columns(3)
+            if i > 0 and i % 5 == 0:
+                color_cols = top_cols[1].columns(5)
             current_color = to_hex(element_colors[e])
-            color = color_cols[i % 3].color_picker(f'{e}', current_color)
+            color = color_cols[i % 5].color_picker(f'{e}', current_color)
             element_colors[e] = color
 
         top_cols[1].write("Prisms")
@@ -287,7 +287,7 @@ if uploaded_file is not None:
 
         for site, neighbors in conns.items():
             neighbors = sorted(neighbors, key=lambda x: x[1])[:22]
-            neighbors_ud = [neighbor for neighbor in neighbors if cell_height-0.1 > abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= 0.2]
+            neighbors_ud = [neighbor for neighbor in neighbors if cell_height-0.01 > abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= 0.1]
             neighbors_c_2d = [np.array(neighbor[3])[non_layer_axes] for neighbor in neighbors if abs(neighbor[3][layer_axis])-abs(neighbor[2][layer_axis]) < 0.2]
             neighbors_c = [neighbor for neighbor in neighbors if abs(neighbor[3][layer_axis])-abs(neighbor[2][layer_axis]) < 0.2]
             
@@ -409,18 +409,7 @@ if uploaded_file is not None:
                     
                     a_neighbors = get_first_n_neighbors(atom[:-1], supercell_points, 22)
                     a_neighbors = sorted(a_neighbors, key=lambda x: x[1])
-                    a_neighbors_ud = [neighbor for neighbor in a_neighbors if cell_height-0.1 > abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= 0.2]
-                    # a_prism = []
-                    # asites = []
-
-                    # for an in a_neighbors:
-                    #     if an[0] in prism_sd:
-                    #         # if sround(an[1]) in prism_sd[an[0]]:
-                    #         if any([abs(an[1] - v) < 0.1 for v in prism_sd[an[0]]]):
-                    #             a_prism.append(np.array(an[-1]))
-                    #             asites.append(an[:2])
-                    # print(a_prism)
-                    # a_prism = a_prism[:n_prism*2]
+                    a_neighbors_ud = [neighbor for neighbor in a_neighbors if cell_height-0.01 > abs(neighbor[3][layer_axis]-neighbor[2][layer_axis]) >= 0.1]
 
                     unique_2Ds = []
                     neighbors_ud_sorted = []
@@ -429,7 +418,7 @@ if uploaded_file is not None:
                         c2d = np.array(neighbor[-1])[non_layer_axes]
 
                         if len(unique_2Ds):
-                            if any(np.linalg.norm(np.vstack(unique_2Ds)-c2d, axis=1) <= 1e-3):
+                            if any(np.linalg.norm(np.vstack(unique_2Ds)-c2d, axis=1) <= 1e-2):
                                 continue
 
                         neighbors_ud_sorted.append(neighbor)
@@ -440,23 +429,23 @@ if uploaded_file is not None:
 
                     a_prism = [np.array(a[-1]) for a in a_neighbors_ud[:n_prism*2]]
 
-                    if len(a_prism) == n_prism*2:                        
-                        if point_in_hull(cell, np.array(atom[:-1]).reshape(-1)[non_layer_axes]) or \
-                            any([point_in_hull(cell, point[non_layer_axes]) for point in a_prism]):
+                    # if len(a_prism) == n_prism*2:                        
+                    if point_in_hull(cell, np.array(atom[:-1]).reshape(-1)[non_layer_axes]) or \
+                        any([point_in_hull(cell, point[non_layer_axes]) for point in a_prism]):
 
-                            envs_in_extended_cell.append([p[non_layer_axes] for p in a_prism])
-                            ah = float(atom[0][layer_axis])
-                            if abs(cell_height-ah) < 0.1:
-                                ah -= cell_height
-                            if ah < -0.1:
-                                ah += cell_height
-                            center_heights.append(sround(ah))
-                            prism_and_cap_xys.extend([p[non_layer_axes] for p in a_prism])
-                            prism_and_cap_xys.append(atom[0][non_layer_axes])
-                
-                            lh = a_neighbors[0][2][layer_axis]
+                        envs_in_extended_cell.append([p[non_layer_axes] for p in a_prism])
+                        ah = float(atom[0][layer_axis])
+                        if abs(cell_height-ah) < 0.1:
+                            ah -= cell_height
+                        if ah < -0.1:
+                            ah += cell_height
+                        center_heights.append(sround(ah))
+                        prism_and_cap_xys.extend([p[non_layer_axes] for p in a_prism])
+                        prism_and_cap_xys.append(atom[0][non_layer_axes])
+            
+                        lh = a_neighbors[0][2][layer_axis]
 
-                            uc_layer_heights.add(lh)
+                        uc_layer_heights.add(lh)
 
                 prisms_in_unitcell[site] = [uc_layer_heights, envs_in_extended_cell, center_heights]
 
@@ -502,7 +491,7 @@ if uploaded_file is not None:
             ax.set_aspect('equal', adjustable='box')
 
             shade = True
-            
+            atol, rtol = 1e-2, 1e-2 
             plotted_prisms = defaultdict(list)
             for site, (layer_heights, prisms, center_heights) in prisms_in_unitcell.items():
                 for layer_height in layer_heights:
@@ -515,14 +504,19 @@ if uploaded_file is not None:
                         continue
                     
                     for prism, center_height in zip(prisms, center_heights):
+                        
+                        if len(prism)/2 != len(np.unique(np.round(prism, 2), axis=0)):
+                            continue
+
                         if abs(center_height - height) > 0.2:
                             continue
                         prism = np.array(prism)
                         prism = prism[np.argsort(prism[:, 0])]
                         prism = prism[np.argsort(prism[:, 1])]
-                        if any([np.all(np.allclose(prism, t, atol=1e-2, rtol=1e-2)) for t in plotted_prisms[len(prism)]]):
+                        if any([np.all(np.allclose(prism, t, atol=atol, rtol=rtol)) for t in plotted_prisms[len(prism)]]):
                             continue
 
+                        plotted_prisms[len(prism)].append(prism)
                         hull = ConvexHull(prism)
                         edges = []
                         for simplex in hull.simplices:
@@ -562,7 +556,6 @@ if uploaded_file is not None:
                             cn_col = prism_colors.get(len(prism), 'tab:gray')
 
                             plt.fill(tx, ty, color=cn_col, alpha=0.5, edgecolor=cn_col)
-                        plotted_prisms[len(prism)].append(prism)
 
         legends = []
 
@@ -640,8 +633,10 @@ if uploaded_file is not None:
 
             for site, (layer_heights, prisms, center_heights) in prisms_in_unitcell.items():
                 for layer_height in layer_heights:
+                    
                     if abs(sround(layer_height) - sround(height)) > 0.2:
                         continue
+                    
                     if not len(prisms):
                         continue
 
@@ -650,13 +645,16 @@ if uploaded_file is not None:
                     
                     for prism, center_height in zip(prisms, center_heights):
 
+                        if len(prism)/2 != len(np.unique(np.round(prism, 2), axis=0)):
+                            continue
+
                         if abs(center_height - height) > 0.2:
                             continue
 
                         prism = np.array(prism)
                         prism = prism[np.argsort(prism[:, 0])]
                         prism = prism[np.argsort(prism[:, 1])]
-                        if any([np.all(np.allclose(prism, t, atol=1e-2, rtol=1e-2)) for t in plotted_prisms[len(prism)]]):
+                        if any([np.all(np.allclose(prism, t, atol=atol, rtol=rtol)) for t in plotted_prisms[len(prism)]]):
                             continue
 
                         hull = ConvexHull(prism)
