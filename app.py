@@ -336,8 +336,9 @@ if uploaded_file is not None:
                 neighbors_ud_sorted.append(neighbor)
                 neighbors_ud_sorted.append(neighbor)
                 unique_2Ds.append(c2d)
-
+            # print(site, pm, len(neighbors_ud_sorted))
             prism_metrics.append([site, pm, neighbors_ud_sorted])
+        prism_metrics = [v for v in prism_metrics if len(v[1])]
         prism_metrics = sorted(prism_metrics, key=lambda x: min([v[1] for v in x[1]]))
             
 
